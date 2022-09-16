@@ -6,11 +6,11 @@ namespace MqttClientAspNetCore.Services
 {
     public class MqttClientService : BackgroundService
     {
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
         {
             try
             {
-                await Handle_Received_Application_Message(stoppingToken);
+                await Handle_Received_Application_Message(cancellationToken);
             }
             catch (OperationCanceledException) { }
         }
@@ -58,7 +58,6 @@ namespace MqttClientAspNetCore.Services
 
                 await mqttClient.SubscribeAsync(mqttSubscribeOptions, CancellationToken.None);
 
-                Console.WriteLine("MQTT client subscribed to topic.");
                 await Task.Delay(Timeout.Infinite, cancellationToken);
             }
         }
