@@ -8,14 +8,14 @@ namespace MqttClientAspNetCore.Services
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                // TODO: Handle application reconnect logic
-                await Handle_Received_Application_Message();
+                await Handle_Received_Application_Message(stoppingToken);
             }
+            catch (OperationCanceledException) { }
         }
 
-        public static async Task Handle_Received_Application_Message()
+        public static async Task Handle_Received_Application_Message(CancellationToken cancellationToken)
         {
 
             var mqttFactory = new MqttFactory();
@@ -27,16 +27,16 @@ namespace MqttClientAspNetCore.Services
                     .Build();
 
                 // Setup message handling before connecting so that queued messages
-                // are also handled properly. When there is no event handler attached all
-                // received messages get lost.
+                // are also handled properly. 
                 mqttClient.ApplicationMessageReceivedAsync += e =>
                 {
                     Console.WriteLine("### RECEIVED APPLICATION MESSAGE ###");
                     Console.WriteLine($"+ Payload = {Encoding.UTF8.GetString(e.ApplicationMessage.Payload)}");
 
+                    // Publish successful message in response
                     var applicationMessage = new MqttApplicationMessageBuilder()
                         .WithTopic("keipalatest/1/resp")
-                        .WithPayload("Tag1:OK")
+                        .WithPayload("OK")
                         .Build();
 
                     mqttClient.PublishAsync(applicationMessage, CancellationToken.None);
@@ -59,10 +59,7 @@ namespace MqttClientAspNetCore.Services
                 await mqttClient.SubscribeAsync(mqttSubscribeOptions, CancellationToken.None);
 
                 Console.WriteLine("MQTT client subscribed to topic.");
-
-                // TODO: Remove and use proper logic to keep from restarting
-                Console.WriteLine("Press enter to exit.");
-                Console.ReadLine();
+                await Task.Delay(Timeout.Infinite, cancellationToken);
             }
         }
     }
