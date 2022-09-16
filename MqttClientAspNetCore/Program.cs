@@ -2,6 +2,11 @@ using MqttClientAspNetCore.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var logger = LoggerFactory.Create(config =>
+{
+    config.AddConsole();
+}).CreateLogger("Program");
+
 builder.Services.AddHostedService<MqttClientService>();
 
 var app = builder.Build();
@@ -9,7 +14,7 @@ var app = builder.Build();
 // To check if web server is still responsive
 app.MapGet("/", () =>
 {
-    Console.WriteLine("Working");
+    logger.LogInformation("Get '/' worked");
     return "Hello World";
 });
 
