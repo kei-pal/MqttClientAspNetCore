@@ -6,60 +6,70 @@ namespace MqttClientAspNetCore.Services
 {
     public class MqttClientService : BackgroundService
     {
-        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+        ILogger<MqttClientService> _logger;
+        IMqttClient _client;
+        private MqttClientOptions _clientOptions;
+        private MqttClientSubscribeOptions _subscriptionOptions;
+
+        public MqttClientService(ILogger<MqttClientService> logger)
         {
-            try
-            {
-                await Handle_Received_Application_Message(cancellationToken);
-            }
-            catch (OperationCanceledException) { }
+            _logger = logger;
+            var factory = new MqttFactory();
+            _client = factory.CreateMqttClient();
+            _clientOptions = new MqttClientOptionsBuilder()
+                            .WithTcpServer("test.mosquitto.org", 1883)
+                            .Build();
+            _subscriptionOptions = factory.CreateSubscribeOptionsBuilder()
+                        .WithTopicFilter(f =>
+                        {
+                            f.WithTopic("keipalatest/post");
+                            f.WithAtLeastOnceQoS();
+                        })
+                        .Build();
+            _client.ApplicationMessageReceivedAsync += HandleMessageAsync;
         }
 
-        public static async Task Handle_Received_Application_Message(CancellationToken cancellationToken)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
 
-            var mqttFactory = new MqttFactory();
+            await _client.ConnectAsync(_clientOptions, CancellationToken.None);
+            _logger.LogInformation("Connected");
 
-            using (var mqttClient = mqttFactory.CreateMqttClient())
+            await _client.SubscribeAsync(_subscriptionOptions, CancellationToken.None);
+            _logger.LogInformation("Subscribed");
+        }
+        public virtual async Task StopAsync(CancellationToken cancellationToken)
+        {
+            await _client.DisconnectAsync();
+            await base.StopAsync(cancellationToken);
+        }
+        async Task HandleMessageAsync(MqttApplicationMessageReceivedEventArgs e)
+        {
+            var payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
+            _logger.LogInformation("### RECEIVED APPLICATION MESSAGE ###\n{payload}", payload);
+            var applicationMessage = new MqttApplicationMessageBuilder()
+                            .WithTopic("keipalatest/resp")
+                            .WithPayload("OK")
+                            .Build();
+
+            await _client.PublishAsync(applicationMessage, CancellationToken.None);
+
+            _logger.LogInformation("MQTT application message is published.");
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
             {
-                var mqttClientOptions = new MqttClientOptionsBuilder()
-                    .WithTcpServer("test.mosquitto.org")
-                    .Build();
-
-                // Setup message handling before connecting so that queued messages
-                // are also handled properly. 
-                mqttClient.ApplicationMessageReceivedAsync += e =>
-                {
-                    Console.WriteLine("### RECEIVED APPLICATION MESSAGE ###");
-                    Console.WriteLine($"+ Payload = {Encoding.UTF8.GetString(e.ApplicationMessage.Payload)}");
-
-                    // Publish successful message in response
-                    var applicationMessage = new MqttApplicationMessageBuilder()
-                        .WithTopic("keipalatest/1/resp")
-                        .WithPayload("OK")
-                        .Build();
-
-                    mqttClient.PublishAsync(applicationMessage, CancellationToken.None);
-
-                    Console.WriteLine("MQTT application message is published.");
-
-                    return Task.CompletedTask;
-                };
-
-                await mqttClient.ConnectAsync(mqttClientOptions, CancellationToken.None);
-
-                var mqttSubscribeOptions = mqttFactory.CreateSubscribeOptionsBuilder()
-                    .WithTopicFilter(f =>
-                    {
-                        f.WithTopic("keipalatest/1/post");
-                        f.WithAtLeastOnceQoS();
-                    })
-                    .Build();
-
-                await mqttClient.SubscribeAsync(mqttSubscribeOptions, CancellationToken.None);
-
-                await Task.Delay(Timeout.Infinite, cancellationToken);
+                _client.Dispose();
+                base.Dispose();
             }
+            _client = null;
         }
     }
 }
