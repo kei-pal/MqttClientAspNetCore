@@ -2,6 +2,7 @@
 using MQTTnet;
 using MQTTnet.Client;
 using System.Text;
+using MqttClientAspNetCore.Options;
 
 namespace MqttClientAspNetCore.Services
 {
@@ -17,15 +18,17 @@ namespace MqttClientAspNetCore.Services
         public MqttClientService(ILogger<MqttClientService> logger, IConfiguration config)
         {
             _logger = logger;
+            
+            this._config = config;
+            var clientSettings = _config.GetSection("MySettings:ClientSettings").Get<ClientSettings>();
             var factory = new MqttFactory();
             _client = factory.CreateMqttClient();
             _clientOptions = new MqttClientOptionsBuilder()
-                            .WithTcpServer("test.mosquitto.org", 1883)
+                            .WithTcpServer(clientSettings.Address, clientSettings.Port)
                             .Build();
-            this._config = config;
-            var valuesSection = _config.GetSection("MySettings:DeviceSettings");
+            var deviceSection = _config.GetSection("MySettings:DeviceSettings");
             
-            foreach (IConfigurationSection section in valuesSection.GetChildren())
+            foreach (IConfigurationSection section in deviceSection.GetChildren())
             {
                 var topic = section.GetValue<string>("DeviceId");
                 _subscriptionOptions = factory.CreateSubscribeOptionsBuilder()
