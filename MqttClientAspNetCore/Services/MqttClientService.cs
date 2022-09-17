@@ -63,9 +63,11 @@ namespace MqttClientAspNetCore.Services
         async Task HandleMessageAsync(MqttApplicationMessageReceivedEventArgs e)
         {
             var payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
-            _logger.LogInformation("### RECEIVED APPLICATION MESSAGE ###\n{payload}", payload);
+            var inTopic = e.ApplicationMessage.Topic;
+            string respTopic = inTopic + "/resp";
+            _logger.LogInformation("Received:{payload} from {inTopic}", payload, inTopic);
             var applicationMessage = new MqttApplicationMessageBuilder()
-                            .WithTopic("keipalatest/resp")
+                            .WithTopic(respTopic)
                             .WithPayload("OK")
                             .Build();
 
