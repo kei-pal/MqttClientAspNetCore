@@ -1,4 +1,5 @@
-﻿using MQTTnet;
+﻿using Microsoft.Extensions.Configuration;
+using MQTTnet;
 using MQTTnet.Client;
 using System.Text;
 
@@ -6,12 +7,14 @@ namespace MqttClientAspNetCore.Services
 {
     public class MqttClientService : BackgroundService
     {
+        private readonly IConfiguration _config;
         ILogger<MqttClientService> _logger;
         IMqttClient _client;
         private MqttClientOptions _clientOptions;
         private MqttClientSubscribeOptions _subscriptionOptions;
+        List<MqttClientSubscribeOptions> subscriptionOptions = new List<MqttClientSubscribeOptions>();
 
-        public MqttClientService(ILogger<MqttClientService> logger)
+        public MqttClientService(ILogger<MqttClientService> logger, IConfiguration config)
         {
             _logger = logger;
             var factory = new MqttFactory();
@@ -19,13 +22,22 @@ namespace MqttClientAspNetCore.Services
             _clientOptions = new MqttClientOptionsBuilder()
                             .WithTcpServer("test.mosquitto.org", 1883)
                             .Build();
-            _subscriptionOptions = factory.CreateSubscribeOptionsBuilder()
+            this._config = config;
+            var valuesSection = _config.GetSection("MySettings:DeviceSettings");
+            
+            foreach (IConfigurationSection section in valuesSection.GetChildren())
+            {
+                var topic = section.GetValue<string>("DeviceId");
+                _subscriptionOptions = factory.CreateSubscribeOptionsBuilder()
                         .WithTopicFilter(f =>
                         {
-                            f.WithTopic("keipalatest/post");
+                            f.WithTopic(topic);
                             f.WithAtLeastOnceQoS();
                         })
                         .Build();
+                subscriptionOptions.Add(_subscriptionOptions);
+            };
+
             _client.ApplicationMessageReceivedAsync += HandleMessageAsync;
         }
 
@@ -34,9 +46,11 @@ namespace MqttClientAspNetCore.Services
 
             await _client.ConnectAsync(_clientOptions, CancellationToken.None);
             _logger.LogInformation("Connected");
-
-            await _client.SubscribeAsync(_subscriptionOptions, CancellationToken.None);
-            _logger.LogInformation("Subscribed");
+            foreach (MqttClientSubscribeOptions _subscriptionOptions in subscriptionOptions)
+            {
+                await _client.SubscribeAsync(_subscriptionOptions, CancellationToken.None);
+            }
+            _logger.LogInformation("Subscribed to topics");
         }
         public virtual async Task StopAsync(CancellationToken cancellationToken)
         {
